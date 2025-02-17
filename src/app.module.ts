@@ -5,18 +5,24 @@ import { AppService } from './app.service';
 import { User } from './entities/user.entity';
 import { Run } from './entities/run.entity';
 import { Challenge } from './entities/challenge.entity';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5433, // Updated to match Docker setup
-      username: 'runit_user',
-      password: 'securepassword',
-      database: 'runit',
-      autoLoadEntities: true,
-      synchronize: true, // ❗ Change to false in production!
+    ConfigModule.forRoot(),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get<string>('DB_HOST'),
+        port: configService.get<number>('DB_PORT'),
+        username: configService.get<string>('DB_USER'),
+        password: configService.get<string>('DB_PASS'),
+        database: configService.get<string>('DB_NAME'),
+        autoLoadEntities: true,
+        synchronize: true, // ❗ Change to false in production!
+      }),
+      inject: [ConfigService],
     }),
     TypeOrmModule.forFeature([User, Run, Challenge]), // ✅ Register entities here
   ],
