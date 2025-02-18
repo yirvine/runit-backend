@@ -1,16 +1,19 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity() // Marks this class as a database table
+@Entity()
 export class User {
-  @PrimaryGeneratedColumn() // Auto-incremented ID
+  @PrimaryGeneratedColumn() // ✅ Auto-generates a unique ID for each user
   id: number;
 
-  @Column({ unique: true }) // Email must be unique
+  @Column({ unique: true }) // ✅ Ensures no duplicate emails
   email: string;
 
-  @Column({ nullable: true }) // Name is optional
-  name: string;
+  @Column({ nullable: true }) // ✅ Users can update their name later
+  name?: string;
 
-  @Column({ nullable: true }) // Profile picture URL is optional
-  profilePicture: string;
+  @Column({ nullable: true }) // ✅ Stores Google profile picture
+  profilePicture?: string;
+
+  @Column({ default: 'google' }) // ✅ Auth provider (for now, only Google)
+  provider: string;
 }

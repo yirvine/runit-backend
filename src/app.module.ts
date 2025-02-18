@@ -6,10 +6,11 @@ import { User } from './entities/user.entity';
 import { Run } from './entities/run.entity';
 import { Challenge } from './entities/challenge.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AuthModule } from './auth/auth.module'; // ✅ Import AuthModule
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot(), // Enables .env support
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -25,8 +26,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       inject: [ConfigService],
     }),
     TypeOrmModule.forFeature([User, Run, Challenge]), // ✅ Register entities here
+    AuthModule, // ✅ Add AuthModule here
   ],
-  controllers: [AppController], // ✅ Moved outside TypeOrmModule.forRoot()
-  providers: [AppService], // ✅ Moved outside TypeOrmModule.forRoot()
+  controllers: [AppController], // ✅ Keep this as it is
+  providers: [AppService], // ✅ Keep this as it is
 })
 export class AppModule {}
