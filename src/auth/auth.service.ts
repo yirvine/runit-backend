@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
+import { JwtService } from '@nestjs/jwt'; // ✅ Import JWT service
 
 @Injectable()
 export class AuthService {
@@ -11,6 +12,7 @@ export class AuthService {
 
   constructor(
     private configService: ConfigService,
+    private jwtService: JwtService, // ✅ Inject JWT service
     @InjectRepository(User) private userRepository: Repository<User>, // ✅ Inject User repository
   ) {
     this.googleClient = new OAuth2Client(
@@ -55,13 +57,52 @@ export class AuthService {
         await this.userRepository.save(user); // ✅ Save new user to database
       }
 
+      // ✅ Generate JWT & Refresh Token
+      const tokens = this.generateTokens(user.id, user.email);
+
       return {
         message: 'User authenticated successfully',
         user,
+        ...tokens, // ✅ Return JWT & refresh token
       };
     } catch (error) {
       console.error('Google authentication error:', error);
       throw new UnauthorizedException('Google authentication failed');
+    }
+  }
+
+  /**
+   * ✅ Generates a JWT and refresh token
+   * @param userId - The user ID
+   * @param email - The user email
+   * @returns An object with accessToken and refreshToken
+   */
+  generateTokens(userId: number, email: string, refresh = true) {
+    const payload = { userId, email };
+
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: '24h', // ✅ Short-lived JWT
+    });
+
+    if (!refresh) {
+      return { accessToken }; // ✅ Only return JWT if refreshing
+    }
+    const refreshToken = this.jwtService.sign(payload, {
+      expiresIn: '30d', // ✅ Long-lived refresh token
+    });
+    return { accessToken, refreshToken };
+  }
+
+  /**
+   * ✅ Validates the refresh token & returns the decoded payload
+   */
+  validateRefreshToken(token: string) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return this.jwtService.verify(token); // ✅ Decode & verify refresh token
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
     }
   }
 
