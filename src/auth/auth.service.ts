@@ -1,10 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { OAuth2Client } from 'google-auth-library';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
-import { JwtService } from '@nestjs/jwt'; // ✅ Import JWT service
+import { JwtService } from '@nestjs/jwt';
+import axios from 'axios'; // ✅ Import axios for Google API calls
 
 @Injectable()
 export class AuthService {
@@ -12,8 +15,8 @@ export class AuthService {
 
   constructor(
     private configService: ConfigService,
-    private jwtService: JwtService, // ✅ Inject JWT service
-    @InjectRepository(User) private userRepository: Repository<User>, // ✅ Inject User repository
+    private jwtService: JwtService,
+    @InjectRepository(User) private userRepository: Repository<User>,
   ) {
     this.googleClient = new OAuth2Client(
       this.configService.get<string>('GOOGLE_CLIENT_ID'),
@@ -22,110 +25,119 @@ export class AuthService {
   }
 
   /**
-   * ✅ Verifies Google ID token and either fetches or creates a user
-   * @param idToken - The Google ID token from the frontend
-   * @returns The user object (existing or newly created)
+   * ✅ Exchanges authorization code for Google tokens
    */
-  async verifyGoogleToken(idToken: string) {
-    try {
-      // ✅ Verify Google token
-      const ticket = await this.googleClient.verifyIdToken({
-        idToken,
-        audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
-      });
-
-      // ✅ Extract user data from token
-      const payload = ticket.getPayload();
-      if (!payload) {
-        throw new UnauthorizedException('Invalid Google token');
-      }
-
-      // ✅ Check if user already exists in database
-      let user = await this.userRepository.findOne({
-        where: { email: payload.email },
-      });
-
-      if (!user) {
-        // ✅ If user doesn't exist, create a new record
-        user = this.userRepository.create({
-          email: payload.email,
-          name: payload.name,
-          profilePicture: payload.picture,
-          provider: 'google',
-        });
-
-        await this.userRepository.save(user); // ✅ Save new user to database
-      }
-
-      // ✅ Generate JWT & Refresh Token
-      const tokens = this.generateTokens(user.id, user.email);
-
-      return {
-        message: 'User authenticated successfully',
-        user,
-        ...tokens, // ✅ Return JWT & refresh token
-      };
-    } catch (error) {
-      console.error('Google authentication error:', error);
-      throw new UnauthorizedException('Google authentication failed');
-    }
-  }
-
-  /**
-   * ✅ Generates a JWT and refresh token
-   * @param userId - The user ID
-   * @param email - The user email
-   * @returns An object with accessToken and refreshToken
-   */
-  generateTokens(userId: number, email: string, refresh = true) {
-    const payload = { userId, email };
-
-    const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '24h', // ✅ Short-lived JWT
-    });
-
-    if (!refresh) {
-      return { accessToken }; // ✅ Only return JWT if refreshing
-    }
-    const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '30d', // ✅ Long-lived refresh token
-    });
-    return { accessToken, refreshToken };
-  }
-
-  /**
-   * ✅ Validates the refresh token & returns the decoded payload
-   */
-  validateRefreshToken(token: string) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return this.jwtService.verify(token); // ✅ Decode & verify refresh token
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-  }
-
   async exchangeCodeForTokens(code: string) {
     try {
       console.log('🔍 Exchanging code for tokens:', code);
 
       const { tokens } = await this.googleClient.getToken({
         code,
-        redirect_uri: this.configService.get<string>('GOOGLE_REDIRECT_URI'), // ✅ Add this line
+        redirect_uri: this.configService.get<string>('GOOGLE_REDIRECT_URI'),
       });
 
       console.log('✅ Tokens received:', tokens);
-      return tokens;
+      return tokens; // ✅ Only returning tokens, not handling user logic
     } catch (error: unknown) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const err = error as any;
       console.error(
         '❌ Google token exchange failed:',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         err.response?.data || err.message,
       );
       throw new UnauthorizedException('Google authentication failed');
+    }
+  }
+
+  /**
+   * ✅ Fetches user information from Google using access token
+   */
+  async getUserInfoFromGoogle(accessToken: string) {
+    try {
+      console.log('🔍 Fetching user info from Google...');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      const { data: userInfo } = await axios.get(
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+
+      console.log('✅ User Info:', userInfo);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return userInfo;
+    } catch (error) {
+      console.error('❌ Failed to fetch user info:', error);
+      throw new UnauthorizedException('Failed to retrieve user data');
+    }
+  }
+
+  /**
+   * ✅ Finds or creates user in the database & generates JWT tokens
+   */
+  async authenticateOrCreateUser(userInfo: {
+    email: string;
+    name: string;
+    picture: string;
+  }) {
+    let user = await this.userRepository.findOne({
+      where: { email: userInfo.email },
+    });
+
+    if (!user) {
+      console.log('🔍 User not found, creating new user...');
+      user = this.userRepository.create({
+        email: userInfo.email,
+        name: userInfo.name,
+        profilePicture: userInfo.picture,
+        provider: 'google',
+      });
+
+      console.log('📝 Attempting to save user:', user); // ✅ Add this log
+      try {
+        await this.userRepository.save(user);
+        console.log('✅ User successfully saved!'); // ✅ Confirm save was successful
+      } catch (error) {
+        console.error('❌ Error saving user:', error); // ✅ Log if save fails
+      }
+    }
+
+    // ✅ Generate JWT & Refresh Token
+    const jwtTokens = this.generateTokens(user.id, user.email);
+
+    return { user, ...jwtTokens };
+  }
+
+  /**
+   * ✅ Generates a JWT and refresh token
+   */
+  generateTokens(userId: number, email: string, refresh = true) {
+    const payload = { userId, email };
+
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: '24h',
+    });
+
+    if (!refresh) {
+      return { accessToken };
+    }
+
+    const refreshToken = this.jwtService.sign(payload, {
+      expiresIn: '30d',
+    });
+
+    return { accessToken, refreshToken };
+  }
+
+  /**
+   * ✅ Validates the refresh token
+   */
+  validateRefreshToken(token: string) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return this.jwtService.verify(token);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
     }
   }
 }

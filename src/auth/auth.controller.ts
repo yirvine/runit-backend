@@ -1,55 +1,76 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Controller,
   Post,
-  Body,
   Get,
   Query,
   Res,
+  Body,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Response } from 'express';
 
-@Controller('auth') // ✅ All routes in this controller start with /auth
+@Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('google') // ✅ Handles POST /auth/google
-  async googleLogin(@Body('idToken') idToken: string) {
-    return this.authService.verifyGoogleToken(idToken);
-  }
-
+  /**
+   * ✅ Step 1: Exchange Google Authorization Code for Tokens
+   * @param code - The Google authorization code
+   */
   @Get('google/callback')
   async googleAuthCallback(@Query('code') code: string, @Res() res: Response) {
-    console.log('🔍 Received code:', code); // ✅ Log the received code for debugging
     try {
-      if (!code) {
-        throw new UnauthorizedException('Missing authorization code');
-      }
+      console.log('🔍 Received code:', code);
+
+      // ✅ Step 1: Exchange code for Google tokens
       const tokens = await this.authService.exchangeCodeForTokens(code);
-      return res.json(tokens);
+
+      if (!tokens.access_token) {
+        throw new UnauthorizedException('No access token received from Google');
+      }
+
+      // ✅ Step 2: Fetch user info from Google using access token
+      const userInfo = await this.authService.getUserInfoFromGoogle(
+        tokens.access_token,
+      );
+
+      // ✅ Step 3: Authenticate or create user & generate app JWT tokens
+      const authResponse =
+        await this.authService.authenticateOrCreateUser(userInfo);
+
+      return res.json(authResponse); // ✅ Return user + JWT tokens to frontend
     } catch (error) {
       console.error('❌ Google authentication failed:', error);
       throw new UnauthorizedException('Google authentication failed');
     }
   }
 
-  @Post('refresh')
-  refreshToken(@Body('refreshToken') refreshToken: string) {
+  /**
+   * ✅ Step 4: Refresh Access Token using Refresh Token
+   * @param refreshToken - The refresh token provided by client
+   */
+  @Post('refresh-token')
+  refreshAccessToken(@Body('refreshToken') refreshToken: string) {
     try {
-      // ✅ Verify refresh token & extract user data
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      console.log('🔄 Refreshing access token...');
+
+      // ✅ Validate & decode refresh token
       const decoded = this.authService.validateRefreshToken(refreshToken);
-      // ✅ Generate and return a new JWT (without a new refresh token)
-      return this.authService.generateTokens(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+
+      // ✅ Generate a new access token (DO NOT generate new refresh token)
+      const newAccessToken = this.authService.generateTokens(
         decoded.userId,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
         decoded.email,
         false,
       );
+
+      return { accessToken: newAccessToken.accessToken };
     } catch (error) {
-      console.error('❌ Refresh token validation failed:', error);
+      console.error('❌ Refresh token failed:', error);
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
