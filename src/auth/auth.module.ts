@@ -5,11 +5,16 @@ import { AuthController } from './auth.controller';
 import { User } from '../entities/user.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt'; // ✅ Import JWT module
+import { JwtStrategy } from './jwt.strategy'; // ✅ Import JWT Strategy
+import { PassportModule } from '@nestjs/passport';
+import { UserController } from './user.controller'; // ✅ Import UserController
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
     ConfigModule,
+    PassportModule, // ✅ Enables authentication handling
+
     JwtModule.registerAsync({
       imports: [ConfigModule], // ✅ Ensures ConfigService is available
       useFactory: (configService: ConfigService) => ({
@@ -19,7 +24,7 @@ import { JwtModule } from '@nestjs/jwt'; // ✅ Import JWT module
       inject: [ConfigService], // ✅ Injects ConfigService for accessing environment variables
     }),
   ],
-  controllers: [AuthController], // ✅ Handles HTTP authentication requests
-  providers: [AuthService], // ✅ Provides authentication logic
+  controllers: [AuthController, UserController], // ✅ Handles HTTP authentication requests
+  providers: [AuthService, JwtStrategy], // ✅ Provides authentication logic
 })
 export class AuthModule {}
