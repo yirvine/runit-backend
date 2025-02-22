@@ -74,4 +74,15 @@ export class AuthController {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
+
+  // @Post('google')
+  // async googleLogin(@Body('idToken') idToken: string) {
+  //   console.log("🔍 Received ID Token:", idToken); // ✅ Log for debugging
+
+  //   if (!idToken) {
+  //     throw new UnauthorizedException("ID Token is required");
+  //   }
+
+  //   return await this.authService.verifyGoogleToken(idToken); // ✅ Add `await` to resolve async function
+  // }
 }
