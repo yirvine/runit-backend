@@ -7,7 +7,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt'; // ✅ Import JWT module
 import { JwtStrategy } from './jwt.strategy'; // ✅ Import JWT Strategy
 import { PassportModule } from '@nestjs/passport';
-import { UserController } from './user.controller'; // ✅ Import UserController
+import { UserController } from '../user/user.controller'; // ✅ Import UserController
+import { FirebaseAdminService } from '../firebase-admin.service'; // ✅ Import FirebaseAdminService
 
 @Module({
   imports: [
@@ -25,6 +26,6 @@ import { UserController } from './user.controller'; // ✅ Import UserController
     }),
   ],
   controllers: [AuthController, UserController], // ✅ Handles HTTP authentication requests
-  providers: [AuthService, JwtStrategy], // ✅ Provides authentication logic
+  providers: [AuthService, JwtStrategy, FirebaseAdminService], // ✅ Provides authentication logic
 })
 export class AuthModule {}
