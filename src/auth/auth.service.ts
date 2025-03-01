@@ -37,6 +37,13 @@ export class AuthService {
       // 🔹 Check if the user exists in PostgreSQL
       let user = await this.userRepository.findOne({ where: { email } });
 
+      // 🔹 If user exists but has no Firebase UID, update it
+      if (user && !user.firebaseUid) {
+        user.firebaseUid = uid; // Assign the Firebase UID
+        await this.userRepository.save(user);
+        console.log('✅ Updated existing user with Firebase UID:', user);
+      }
+
       // 🔹 If user does not exist, create a new entry
       if (!user) {
         user = this.userRepository.create({
